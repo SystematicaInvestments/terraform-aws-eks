@@ -199,6 +199,12 @@ resource "aws_security_group_rule" "cluster" {
 # Note - this is different from EKS identity provider
 ################################################################################
 
+provider "tls" {
+  proxy {
+    from_env = true
+  }
+}
+
 data "tls_certificate" "this" {
   count = local.create && var.enable_irsa ? 1 : 0
 
