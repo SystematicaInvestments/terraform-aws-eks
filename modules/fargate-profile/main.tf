@@ -7,7 +7,8 @@ locals {
 
   iam_role_policy_prefix = "arn:${data.aws_partition.current.partition}:iam::aws:policy"
 
-  cni_policy = var.cluster_ip_family == "ipv6" ? "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:policy/AmazonEKS_CNI_IPv6_Policy" : "${local.iam_role_policy_prefix}/AmazonEKS_CNI_Policy"
+  cni_policy           = var.cluster_ip_family == "ipv6" ? "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:policy/AmazonEKS_CNI_IPv6_Policy" : "${local.iam_role_policy_prefix}/AmazonEKS_CNI_Policy"
+  fargate_iam_policies = toset(["arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy", "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"])
 }
 
 ################################################################################
@@ -43,15 +44,27 @@ resource "aws_iam_role" "this" {
   tags = merge(var.tags, var.iam_role_tags)
 }
 
+# Original retained for reference
+#resource "aws_iam_role_policy_attachment" "this" {
+#  for_each = var.create && var.create_iam_role ? toset(compact(distinct(concat([
+#    "${local.iam_role_policy_prefix}/AmazonEKSFargatePodExecutionRolePolicy",
+#    var.iam_role_attach_cni_policy ? local.cni_policy : "",
+#  ], var.iam_role_additional_policies)))) : toset([])
+
+#  policy_arn = each.value
+#  role       = aws_iam_role.this[0].name
+#}
+
+# The block above causes an issue in the for_each that cannot be cleanly resolved
+# We just add our core policies here directly
+# DEVOPS-422 will fix attaching additional policies 
 resource "aws_iam_role_policy_attachment" "this" {
-  for_each = var.create && var.create_iam_role ? toset(compact(distinct(concat([
-    "${local.iam_role_policy_prefix}/AmazonEKSFargatePodExecutionRolePolicy",
-    var.iam_role_attach_cni_policy ? local.cni_policy : "",
-  ], var.iam_role_additional_policies)))) : toset([])
+  for_each = local.fargate_iam_policies
 
   policy_arn = each.value
   role       = aws_iam_role.this[0].name
 }
+
 
 ################################################################################
 # Fargate Profile
